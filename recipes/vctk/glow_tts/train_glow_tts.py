@@ -12,7 +12,7 @@ from pathlib import Path
 
 # set experiment paths
 output_path = os.path.dirname(os.path.abspath(__file__))
-dataset_path = os.path.join(output_path, "/Users/rebeiro/github/coqui-tts/open-bible-yo/")
+dataset_path = os.path.join(output_path, "/Users/rebeiro/github/tts/open-bible-yo/")
 
 # download the dataset if not downloaded
 # if not os.path.exists(dataset_path):
