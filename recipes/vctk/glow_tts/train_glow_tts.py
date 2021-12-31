@@ -40,7 +40,7 @@ def bible_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-a
             text = cols[1]
             if os.path.isfile(wav_file):
                 if len(text) > 0:
-                    text = text.strip()
+                    text = text.strip().lower()
                     items.append([text, wav_file, speaker_name])
                 else:
                     print("text len <= 0, empty text?")
