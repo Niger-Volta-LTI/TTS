@@ -26,9 +26,16 @@ def get_tests_input_path():
     return os.path.join(get_tests_path(), "inputs")
 
 
+def get_tests_data_path():
+    """Returns the path to the test data directory."""
+    return os.path.join(get_tests_path(), "data")
+
+
 def get_tests_output_path():
     """Returns the path to the directory for test outputs."""
-    return os.path.join(get_tests_path(), "outputs")
+    path = os.path.join(get_tests_path(), "outputs")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def run_cli(command):
@@ -37,4 +44,15 @@ def run_cli(command):
 
 
 def get_test_data_config():
-    return BaseDatasetConfig(name="ljspeech", path="tests/data/ljspeech/", meta_file_train="metadata.csv")
+    return BaseDatasetConfig(formatter="ljspeech", path="tests/data/ljspeech/", meta_file_train="metadata.csv")
+
+
+def assertHasAttr(test_obj, obj, intendedAttr):
+    # from https://stackoverflow.com/questions/48078636/pythons-unittest-lacks-an-asserthasattr-method-what-should-i-use-instead
+    testBool = hasattr(obj, intendedAttr)
+    test_obj.assertTrue(testBool, msg=f"obj lacking an attribute. obj: {obj}, intendedAttr: {intendedAttr}")
+
+
+def assertHasNotAttr(test_obj, obj, intendedAttr):
+    testBool = hasattr(obj, intendedAttr)
+    test_obj.assertFalse(testBool, msg=f"obj should not have an attribute. obj: {obj}, intendedAttr: {intendedAttr}")

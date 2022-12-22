@@ -115,7 +115,9 @@ venv.bak/
 *.swo
 
 # pytorch models
+*.pth
 *.pth.tar
+!dummy_speakers.pth
 result/
 
 # setup.py
@@ -128,6 +130,8 @@ core
 recipes/WIP/*
 recipes/ljspeech/LJSpeech-1.1/*
 recipes/vctk/VCTK/*
+recipes/**/*.npy
+recipes/**/*.json
 VCTK-Corpus-removed-silence/*
 
 # ignore training logs
@@ -162,3 +166,5 @@ internal/*
 *_pitch.npy
 *_phoneme.npy
 wandb
+depot/*
+coqui_recipes/*

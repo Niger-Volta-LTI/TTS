@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from TTS.tts.configs.shared_configs import BaseTTSConfig
-from TTS.tts.models.vits import VitsArgs
+from TTS.tts.models.vits import VitsArgs, VitsAudioConfig
 
 
 @dataclass
@@ -16,8 +16,11 @@ class VitsConfig(BaseTTSConfig):
         model_args (VitsArgs):
             Model architecture arguments. Defaults to `VitsArgs()`.
 
+        audio (VitsAudioConfig):
+            Audio processing configuration. Defaults to `VitsAudioConfig()`.
+
         grad_clip (List):
-            Gradient clipping thresholds for each optimizer. Defaults to `[5.0, 5.0]`.
+            Gradient clipping thresholds for each optimizer. Defaults to `[1000.0, 1000.0]`.
 
         lr_gen (float):
             Initial learning rate for the generator. Defaults to 0.0002.
@@ -67,14 +70,17 @@ class VitsConfig(BaseTTSConfig):
         compute_linear_spec (bool):
             If true, the linear spectrogram is computed and returned alongside the mel output. Do not change. Defaults to `True`.
 
-        sort_by_audio_len (bool):
-            If true, dataloder sorts the data by audio length else sorts by the input text length. Defaults to `True`.
+        use_weighted_sampler (bool):
+            If true, use weighted sampler with bucketing for balancing samples between datasets used in training. Defaults to `False`.
 
-        min_seq_len (int):
-            Minimum sequnce length to be considered for training. Defaults to `0`.
+        weighted_sampler_attrs (dict):
+            Key retuned by the formatter to be used for weighted sampler. For example `{"root_path": 2.0, "speaker_name": 1.0}` sets sample probabilities
+            by overweighting `root_path` by 2.0. Defaults to `{}`.
 
-        max_seq_len (int):
-            Maximum sequnce length to be considered for training. Defaults to `500000`.
+        weighted_sampler_multipliers (dict):
+            Weight each unique value of a key returned by the formatter for weighted sampling.
+            For example `{"root_path":{"/raid/datasets/libritts-clean-16khz-bwe-coqui_44khz/LibriTTS/train-clean-100/":1.0, "/raid/datasets/libritts-clean-16khz-bwe-coqui_44khz/LibriTTS/train-clean-360/": 0.5}`.
+            It will sample instances from `train-clean-100` 2 times more than `train-clean-360`. Defaults to `{}`.
 
         r (int):
             Number of spectrogram frames to be generated at a time. Do not change. Defaults to `1`.
@@ -82,8 +88,14 @@ class VitsConfig(BaseTTSConfig):
         add_blank (bool):
             If true, a blank token is added in between every character. Defaults to `True`.
 
-        test_sentences (List[str]):
-            List of sentences to be used for testing.
+        test_sentences (List[List]):
+            List of sentences with speaker and language information to be used for testing.
+
+        language_ids_file (str):
+            Path to the language ids file.
+
+        use_language_embedding (bool):
+            If true, language embedding is used. Defaults to `False`.
 
     Note:
         Check :class:`TTS.tts.configs.shared_configs.BaseTTSConfig` for the inherited parameters.
@@ -97,6 +109,7 @@ class VitsConfig(BaseTTSConfig):
     model: str = "vits"
     # model specific params
     model_args: VitsArgs = field(default_factory=VitsArgs)
+    audio: VitsAudioConfig = VitsAudioConfig()
 
     # optimizer
     grad_clip: List[float] = field(default_factory=lambda: [1000, 1000])
@@ -117,26 +130,29 @@ class VitsConfig(BaseTTSConfig):
     feat_loss_alpha: float = 1.0
     mel_loss_alpha: float = 45.0
     dur_loss_alpha: float = 1.0
+    speaker_encoder_loss_alpha: float = 1.0
 
     # data loader params
     return_wav: bool = True
     compute_linear_spec: bool = True
 
+    # sampler params
+    use_weighted_sampler: bool = False  # TODO: move it to the base config
+    weighted_sampler_attrs: dict = field(default_factory=lambda: {})
+    weighted_sampler_multipliers: dict = field(default_factory=lambda: {})
+
     # overrides
-    sort_by_audio_len: bool = True
-    min_seq_len: int = 0
-    max_seq_len: int = 500000
     r: int = 1  # DO NOT CHANGE
     add_blank: bool = True
 
     # testing
-    test_sentences: List[str] = field(
+    test_sentences: List[List] = field(
         default_factory=lambda: [
-            "It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
-            "Be a voice, not an echo.",
-            "I'm sorry Dave. I'm afraid I can't do that.",
-            "This cake is great. It's so delicious and moist.",
-            "Prior to November 22, 1963.",
+            ["It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent."],
+            ["Be a voice, not an echo."],
+            ["I'm sorry Dave. I'm afraid I can't do that."],
+            ["This cake is great. It's so delicious and moist."],
+            ["Prior to November 22, 1963."],
         ]
     )
 
@@ -146,29 +162,15 @@ class VitsConfig(BaseTTSConfig):
     use_speaker_embedding: bool = False
     speakers_file: str = None
     speaker_embedding_channels: int = 256
+    language_ids_file: str = None
+    use_language_embedding: bool = False
 
     # use d-vectors
     use_d_vector_file: bool = False
-    d_vector_file: str = False
+    d_vector_file: str = None
     d_vector_dim: int = None
 
     def __post_init__(self):
-        # Pass multi-speaker parameters to the model args as `model.init_multispeaker()` looks for it there.
-        if self.num_speakers > 0:
-            self.model_args.num_speakers = self.num_speakers
-
-        # speaker embedding settings
-        if self.use_speaker_embedding:
-            self.model_args.use_speaker_embedding = True
-        if self.speakers_file:
-            self.model_args.speakers_file = self.speakers_file
-        if self.speaker_embedding_channels:
-            self.model_args.speaker_embedding_channels = self.speaker_embedding_channels
-
-        # d-vector settings
-        if self.use_d_vector_file:
-            self.model_args.use_d_vector_file = True
-        if self.d_vector_dim is not None and self.d_vector_dim > 0:
-            self.model_args.d_vector_dim = self.d_vector_dim
-        if self.d_vector_file:
-            self.model_args.d_vector_file = self.d_vector_file
+        for key, val in self.model_args.items():
+            if hasattr(self, key):
+                self[key] = val

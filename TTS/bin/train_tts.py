@@ -1,17 +1,22 @@
 import os
+from dataclasses import dataclass, field
+
+from trainer import Trainer, TrainerArgs
 
 from TTS.config import load_config, register_config
-from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.datasets import load_tts_samples
 from TTS.tts.models import setup_model
-from TTS.tts.utils.speakers import SpeakerManager
-from TTS.utils.audio import AudioProcessor
+
+
+@dataclass
+class TrainTTSArgs(TrainerArgs):
+    config_path: str = field(default=None, metadata={"help": "Path to the config file."})
 
 
 def main():
     """Run `tts` model training directly by a `config.json` file."""
     # init trainer args
-    train_args = TrainingArgs()
+    train_args = TrainTTSArgs()
     parser = train_args.init_argparse(arg_prefix="")
 
     # override trainer args from comman-line args
@@ -39,31 +44,24 @@ def main():
             config = register_config(config_base.model)()
 
     # load training samples
-    train_samples, eval_samples = load_tts_samples(config.datasets, eval_split=True)
-
-    # setup audio processor
-    ap = AudioProcessor(**config.audio)
-
-    # init speaker manager
-    if config.use_speaker_embedding:
-        speaker_manager = SpeakerManager(data_items=train_samples + eval_samples)
-    elif config.use_d_vector_file:
-        speaker_manager = SpeakerManager(d_vectors_file_path=config.d_vector_file)
-    else:
-        speaker_manager = None
+    train_samples, eval_samples = load_tts_samples(
+        config.datasets,
+        eval_split=True,
+        eval_split_max_size=config.eval_split_max_size,
+        eval_split_size=config.eval_split_size,
+    )
 
     # init the model from config
-    model = setup_model(config, speaker_manager)
+    model = setup_model(config, train_samples + eval_samples)
 
     # init the trainer and 🚀
     trainer = Trainer(
         train_args,
-        config,
+        model.config,
         config.output_path,
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
-        training_assets={"audio_processor": ap},
         parse_command_line_args=False,
     )
     trainer.fit()

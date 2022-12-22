@@ -37,6 +37,7 @@ class TextEncoder(nn.Module):
         num_layers: int,
         kernel_size: int,
         dropout_p: float,
+        language_emb_dim: int = None,
     ):
         """Text Encoder for VITS model.
 
@@ -55,7 +56,11 @@ class TextEncoder(nn.Module):
         self.hidden_channels = hidden_channels
 
         self.emb = nn.Embedding(n_vocab, hidden_channels)
-        nn.init.normal_(self.emb.weight, 0.0, hidden_channels ** -0.5)
+
+        nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
+
+        if language_emb_dim:
+            hidden_channels += language_emb_dim
 
         self.encoder = RelativePositionTransformer(
             in_channels=hidden_channels,
@@ -72,15 +77,21 @@ class TextEncoder(nn.Module):
 
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
-    def forward(self, x, x_lengths):
+    def forward(self, x, x_lengths, lang_emb=None):
         """
         Shapes:
             - x: :math:`[B, T]`
             - x_length: :math:`[B]`
         """
+        assert x.shape[0] == x_lengths.shape[0]
         x = self.emb(x) * math.sqrt(self.hidden_channels)  # [b, t, h]
+
+        # concat the lang emb in embedding chars
+        if lang_emb is not None:
+            x = torch.cat((x, lang_emb.transpose(2, 1).expand(x.size(0), x.size(1), -1)), dim=-1)
+
         x = torch.transpose(x, 1, -1)  # [b, h, t]
-        x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
+        x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)  # [b, 1, t]
 
         x = self.encoder(x * x_mask, x_mask)
         stats = self.proj(x) * x_mask
@@ -126,6 +137,9 @@ class ResidualCouplingBlock(nn.Module):
 
     def forward(self, x, x_mask, g=None, reverse=False):
         """
+        Note:
+            Set `reverse` to True for inference.
+
         Shapes:
             - x: :math:`[B, C, T]`
             - x_mask: :math:`[B, 1, T]`
@@ -199,6 +213,9 @@ class ResidualCouplingBlocks(nn.Module):
 
     def forward(self, x, x_mask, g=None, reverse=False):
         """
+        Note:
+            Set `reverse` to True for inference.
+
         Shapes:
             - x: :math:`[B, C, T]`
             - x_mask: :math:`[B, 1, T]`
