@@ -109,7 +109,7 @@ class VitsConfig(BaseTTSConfig):
     model: str = "vits"
     # model specific params
     model_args: VitsArgs = field(default_factory=VitsArgs)
-    audio: VitsAudioConfig = VitsAudioConfig()
+    audio: VitsAudioConfig = field(default_factory=VitsAudioConfig)
 
     # optimizer
     grad_clip: List[float] = field(default_factory=lambda: [1000, 1000])
@@ -167,7 +167,7 @@ class VitsConfig(BaseTTSConfig):
 
     # use d-vectors
     use_d_vector_file: bool = False
-    d_vector_file: str = None
+    d_vector_file: List[str] = None
     d_vector_dim: int = None
 
     def __post_init__(self):
